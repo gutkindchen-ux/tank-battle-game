@@ -48,24 +48,73 @@ class Tank {
         ctx.fillStyle = this.color;
         ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
 
+        // 绘制坦克主体装饰线
+        ctx.strokeStyle = this.isPlayer ? '#004400' : '#880000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-this.width / 2 + 2, -this.height / 2 + 2, this.width - 4, this.height - 4);
+
         // 绘制坦克炮管
         ctx.fillStyle = this.isPlayer ? '#4a4a4a' : '#8b4513';
-        ctx.fillRect(-3, -this.height / 2 - 10, 6, 15);
+        ctx.fillRect(-4, -this.height / 2 - 12, 8, 16);
+
+        // 炮管装饰
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-5, -this.height / 2 - 10, 10, 4);
 
         // 绘制坦克履带
         ctx.fillStyle = this.isPlayer ? '#2a2a2a' : '#654321';
-        ctx.fillRect(-this.width / 2 - 2, -this.height / 2, 4, this.height);
-        ctx.fillRect(this.width / 2 - 2, -this.height / 2, 4, this.height);
+        // 左履带
+        ctx.fillRect(-this.width / 2 - 3, -this.height / 2, 5, this.height);
+        // 右履带
+        ctx.fillRect(this.width / 2 - 2, -this.height / 2, 5, this.height);
+
+        // 绘制履带轮子
+        ctx.fillStyle = '#444';
+        for (let i = -this.height/2 + 6; i < this.height/2; i += 12) {
+            ctx.beginPath();
+            ctx.arc(-this.width/2 - 0.5, i, 3, 0, Math.PI * 2);
+            ctx.arc(this.width/2 + 0.5, i, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 绘制坦克舱盖
+        ctx.fillStyle = this.isPlayer ? '#006600' : '#aa0000';
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 绘制舱盖高光
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(-2, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 如果是强化敌方坦克，添加标记
+        if (!this.isPlayer && this.health > 1) {
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-10, -10);
+            ctx.lineTo(10, 10);
+            ctx.moveTo(10, -10);
+            ctx.lineTo(-10, 10);
+            ctx.stroke();
+        }
+
+        ctx.restore();
 
         // 如果是玩家坦克，显示生命值
         if (this.isPlayer) {
-            ctx.restore();
             ctx.fillStyle = '#00ff00';
             for (let i = 0; i < this.health; i++) {
                 ctx.fillRect(this.x + i * 12, this.y - 10, 10, 5);
             }
-        } else {
-            ctx.restore();
+        } else if (this.health > 1) {
+            // 显示强化坦克的生命值
+            ctx.fillStyle = '#ff00ff';
+            for (let i = 0; i < this.health; i++) {
+                ctx.fillRect(this.x + i * 8, this.y - 8, 6, 4);
+            }
         }
     }
 
@@ -220,8 +269,49 @@ class Bullet {
     }
 
     draw() {
-        ctx.fillStyle = this.isPlayerBullet ? '#ffff00' : '#ff4500';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        // 绘制子弹光晕效果
+        const gradient = ctx.createRadialGradient(
+            this.x + this.width/2, this.y + this.height/2, 0,
+            this.x + this.width/2, this.y + this.height/2, this.width
+        );
+
+        if (this.isPlayerBullet) {
+            gradient.addColorStop(0, 'rgba(255, 255, 0, 1)');
+            gradient.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)');
+            gradient.addColorStop(1, 'rgba(255, 255, 0, 0.3)');
+        } else {
+            gradient.addColorStop(0, 'rgba(255, 69, 0, 1)');
+            gradient.addColorStop(0.5, 'rgba(255, 69, 0, 0.8)');
+            gradient.addColorStop(1, 'rgba(255, 69, 0, 0.3)');
+        }
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 绘制子弹核心
+        ctx.fillStyle = this.isPlayerBullet ? '#FFFF00' : '#FF4500';
+        ctx.fillRect(this.x + 1, this.y + 1, this.width - 2, this.height - 2);
+
+        // 添加拖尾效果
+        const tailLength = 15;
+        const tailGradient = ctx.createLinearGradient(
+            this.x + this.width/2 - this.dx * tailLength,
+            this.y + this.height/2 - this.dy * tailLength,
+            this.x + this.width/2,
+            this.y + this.height/2
+        );
+
+        tailGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        tailGradient.addColorStop(1, this.isPlayerBullet ? 'rgba(255, 255, 0, 0.6)' : 'rgba(255, 69, 0, 0.6)');
+
+        ctx.strokeStyle = tailGradient;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.width/2, this.y + this.height/2);
+        ctx.lineTo(this.x + this.width/2 - this.dx * tailLength, this.y + this.height/2 - this.dy * tailLength);
+        ctx.stroke();
     }
 
     update() {
@@ -282,19 +372,77 @@ class Explosion {
         this.x = x;
         this.y = y;
         this.radius = 5;
-        this.maxRadius = 30;
+        this.maxRadius = 35;
         this.active = true;
+        this.particles = this.createParticles();
+    }
+
+    createParticles() {
+        const particles = [];
+        const particleCount = 12;
+        for (let i = 0; i < particleCount; i++) {
+            particles.push({
+                x: this.x,
+                y: this.y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                size: Math.random() * 5 + 2,
+                life: 1,
+                color: Math.random() < 0.5 ? '#FF4500' : '#FFD700'
+            });
+        }
+        return particles;
     }
 
     draw() {
-        ctx.fillStyle = `rgba(255, 100, 0, ${1 - (this.radius / this.maxRadius)})`;
+        // 绘制主爆炸圈
+        const alpha = 1 - (this.radius / this.maxRadius);
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+        gradient.addColorStop(0, `rgba(255, 255, 0, ${alpha})`);
+        gradient.addColorStop(0.4, `rgba(255, 140, 0, ${alpha * 0.8})`);
+        gradient.addColorStop(0.7, `rgba(255, 69, 0, ${alpha * 0.5})`);
+        gradient.addColorStop(1, `rgba(255, 0, 0, 0)`);
+
+        ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
+
+        // 绘制爆炸粒子
+        this.particles.forEach(particle => {
+            if (particle.life > 0) {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        ctx.globalAlpha = 1;
+
+        // 绘制闪光效果
+        if (this.radius < this.maxRadius * 0.3) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     }
 
     update() {
         this.radius += 2;
+
+        // 更新粒子
+        this.particles.forEach(particle => {
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+            particle.vx *= 0.95;
+            particle.vy *= 0.95;
+            particle.life -= 0.05;
+            particle.size *= 0.95;
+        });
+
         if (this.radius >= this.maxRadius) {
             this.active = false;
         }
@@ -317,27 +465,90 @@ class Wall {
 
         switch(this.type) {
             case 'brick':
-                ctx.fillStyle = '#8B4513';
+                // 绘制砖块主体
+                ctx.fillStyle = '#CD853F';
                 ctx.fillRect(this.x, this.y, this.width, this.height);
+
                 // 绘制砖块纹理
-                ctx.strokeStyle = '#654321';
-                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 1;
+
+                // 水平分割线
                 ctx.beginPath();
-                ctx.moveTo(this.x + this.width/2, this.y);
-                ctx.lineTo(this.x + this.width/2, this.y + this.height);
                 ctx.moveTo(this.x, this.y + this.height/2);
                 ctx.lineTo(this.x + this.width, this.y + this.height/2);
                 ctx.stroke();
+
+                // 垂直分割线（交错）
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.width/2, this.y);
+                ctx.lineTo(this.x + this.width/2, this.y + this.height/2);
+                ctx.moveTo(this.x + this.width/4, this.y + this.height/2);
+                ctx.lineTo(this.x + this.width/4, this.y + this.height);
+                ctx.moveTo(this.x + this.width*3/4, this.y + this.height/2);
+                ctx.lineTo(this.x + this.width*3/4, this.y + this.height);
+                ctx.stroke();
+
+                // 添加阴影效果
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(this.x + this.width - 3, this.y + 3, 3, this.height - 3);
                 break;
+
             case 'steel':
-                ctx.fillStyle = '#708090';
+                // 绘制钢块主体
+                const gradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+                gradient.addColorStop(0, '#B0C4DE');
+                gradient.addColorStop(0.5, '#778899');
+                gradient.addColorStop(1, '#696969');
+                ctx.fillStyle = gradient;
                 ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // 绘制钢块边框
                 ctx.strokeStyle = '#2F4F4F';
+                ctx.lineWidth = 2;
                 ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+                // 添加铆钉效果
+                ctx.fillStyle = '#696969';
+                const rivetSize = 3;
+                const rivetOffset = 6;
+                ctx.beginPath();
+                ctx.arc(this.x + rivetOffset, this.y + rivetOffset, rivetSize, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width - rivetOffset, this.y + rivetOffset, rivetSize, 0, Math.PI * 2);
+                ctx.arc(this.x + rivetOffset, this.y + this.height - rivetOffset, rivetSize, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width - rivetOffset, this.y + this.height - rivetOffset, rivetSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 高光效果
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(this.x + 2, this.y + 2, this.width - 4, 4);
                 break;
+
             case 'water':
-                ctx.fillStyle = 'rgba(0, 150, 255, 0.6)';
+                // 绘制水体
+                ctx.fillStyle = '#4682B4';
                 ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // 添加水波纹效果
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 1;
+                const waveOffset = (Date.now() / 100) % 20;
+
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y + i * 15 + waveOffset);
+                    for (let j = 0; j < this.width; j += 10) {
+                        ctx.quadraticCurveTo(
+                            this.x + j + 5, this.y + i * 15 + waveOffset - 3,
+                            this.x + j + 10, this.y + i * 15 + waveOffset
+                        );
+                    }
+                    ctx.stroke();
+                }
+
+                // 添加深色底部
+                ctx.fillStyle = 'rgba(0, 0, 139, 0.3)';
+                ctx.fillRect(this.x, this.y + this.height - 8, this.width, 8);
                 break;
         }
     }
@@ -368,26 +579,77 @@ class Base {
     draw() {
         if (!this.active) return;
 
-        // 绘制基地
-        ctx.fillStyle = '#FFD700';
+        // 绘制基地平台
+        ctx.fillStyle = '#8B7355';
+        ctx.fillRect(this.x - 5, this.y - 5, this.width + 10, this.height + 10);
+
+        // 绘制基地主体
+        ctx.fillStyle = this.health > 2 ? '#FFD700' : '#FFA500';
         ctx.fillRect(this.x, this.y, this.width, this.height);
 
-        // 绘制基地中心
-        ctx.fillStyle = '#FF6347';
+        // 绘制基地主体装饰
+        ctx.strokeStyle = '#B8860B';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+
+        // 绘制基地中心建筑（指挥中心）
+        const centerX = this.x + this.width/2;
+        const centerY = this.y + this.height/2;
+
+        // 主体建筑
+        ctx.fillStyle = '#4169E1';
+        ctx.fillRect(centerX - 15, centerY - 15, 30, 30);
+
+        // 建筑窗户
+        ctx.fillStyle = this.health > 3 ? '#87CEEB' : '#FF6B6B';
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                if (i === 1 && j === 1) continue; // 中心是天线
+                ctx.fillRect(centerX - 12 + i * 10, centerY - 12 + j * 10, 6, 6);
+            }
+        }
+
+        // 绘制天线
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(this.x + this.width/2, this.y + this.height/2, 15, 0, Math.PI * 2);
+        ctx.moveTo(centerX, centerY - 15);
+        ctx.lineTo(centerX, centerY - 25);
+        ctx.stroke();
+
+        // 天线顶部
+        ctx.fillStyle = '#FF0000';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY - 25, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // 绘制生命值条
-        const barWidth = 40;
-        const barHeight = 4;
-        const barX = this.x + (this.width - barWidth) / 2;
-        const barY = this.y - 10;
+        // 绘制雷达
+        if (this.health > 1) {
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 20 + Math.sin(Date.now() / 500) * 5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
 
-        ctx.fillStyle = '#ff0000';
+        // 绘制生命值条
+        const barWidth = 50;
+        const barHeight = 6;
+        const barX = this.x + (this.width - barWidth) / 2;
+        const barY = this.y - 15;
+
+        // 生命值条背景
+        ctx.fillStyle = '#333';
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        ctx.fillStyle = '#00ff00';
+        // 生命值条边框
+        ctx.strokeStyle = '#666';
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+        // 当前生命值
+        const healthColor = this.health > 3 ? '#00ff00' :
+                           this.health > 1 ? '#ffff00' : '#ff0000';
+        ctx.fillStyle = healthColor;
         ctx.fillRect(barX, barY, barWidth * (this.health / this.maxHealth), barHeight);
     }
 
@@ -413,7 +675,8 @@ let keys = {};
 
 // 初始化游戏
 function initGame() {
-    playerTank = new Tank(CANVAS_WIDTH / 2 - 15, CANVAS_HEIGHT - 120, '#00ff00', 'up', true);
+    // 玩家坦克初始位置改为左下角
+    playerTank = new Tank(60, CANVAS_HEIGHT - 120, '#00ff00', 'up', true);
     enemyTanks = [];
     explosions = [];
     walls = [];
@@ -422,7 +685,7 @@ function initGame() {
     enemyTankCount = 5;
     baseHealth = 5;
 
-    // 创建老家
+    // 创建老家 - 保持在底部中央
     base = new Base(CANVAS_WIDTH/2 - 30, CANVAS_HEIGHT - 60);
 
     // 创建随机地图
@@ -472,11 +735,35 @@ function createRandomMap() {
 // 创建敌方坦克
 function createEnemyTanks() {
     for (let i = 0; i < enemyTankCount; i++) {
-        const x = Math.random() * (CANVAS_WIDTH - 30);
-        const y = Math.random() * 200;
-        const directions = ['up', 'down', 'left', 'right'];
+        let x, y;
+
+        // 随机选择生成位置：上方40%区域或右侧20%区域
+        if (Math.random() < 0.4) {
+            // 从上方生成
+            x = Math.random() * (CANVAS_WIDTH - 60) + 30;
+            y = Math.random() * 150;
+        } else {
+            // 从右侧生成
+            x = CANVAS_WIDTH - 100 + Math.random() * 70;
+            y = 100 + Math.random() * (CANVAS_HEIGHT - 300);
+        }
+
+        const directions = ['down', 'left']; // 初始方向朝向地图中央
         const direction = directions[Math.floor(Math.random() * directions.length)];
-        enemyTanks.push(new Tank(x, y, '#ff0000', direction, false));
+
+        // 根据等级设置不同的坦克类型
+        let color = '#ff0000';
+        let health = 1;
+
+        if (currentLevel >= 3 && Math.random() < 0.3) {
+            // 3级以上有30%概率出现强化坦克
+            color = '#ff00ff';
+            health = 2;
+        }
+
+        const enemy = new Tank(x, y, color, direction, false);
+        enemy.health = health;
+        enemyTanks.push(enemy);
     }
 }
 
