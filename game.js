@@ -10,6 +10,7 @@ let playerScore = 0;
 let currentLevel = 1;
 let enemyTankCount = 5;
 let animationId = null;
+let baseHealth = 5; // 老家生命值
 
 // 游戏对象类
 class Tank {
@@ -73,12 +74,62 @@ class Tank {
         const newY = this.y + dy * this.speed;
 
         // 边界检测
-        if (newX >= 0 && newX <= CANVAS_WIDTH - this.width) {
-            this.x = newX;
+        if (newX >= 0 && newX <= CANVAS_WIDTH - this.width &&
+            newY >= 0 && newY <= CANVAS_HEIGHT - this.height) {
+
+            // 墙壁碰撞检测
+            let canMove = true;
+            for (let wall of walls) {
+                if (wall.active && this.checkWallCollision(newX, newY, wall)) {
+                    canMove = false;
+                    break;
+                }
+            }
+
+            // 坦克之间的碰撞检测
+            if (canMove) {
+                for (let tank of [playerTank, ...enemyTanks]) {
+                    if (tank !== this && this.checkTankCollision(newX, newY, tank)) {
+                        canMove = false;
+                        break;
+                    }
+                }
+            }
+
+            // 与老家碰撞检测（只有敌方坦克会碰撞）
+            if (canMove && !this.isPlayer && base && base.active) {
+                if (this.checkBaseCollision(newX, newY)) {
+                    canMove = false;
+                }
+            }
+
+            if (canMove) {
+                this.x = newX;
+                this.y = newY;
+            }
         }
-        if (newY >= 0 && newY <= CANVAS_HEIGHT - this.height) {
-            this.y = newY;
-        }
+    }
+
+    checkWallCollision(newX, newY, wall) {
+        return newX < wall.x + wall.width &&
+               newX + this.width > wall.x &&
+               newY < wall.y + wall.height &&
+               newY + this.height > wall.y;
+    }
+
+    checkTankCollision(newX, newY, otherTank) {
+        return newX < otherTank.x + otherTank.width &&
+               newX + this.width > otherTank.x &&
+               newY < otherTank.y + otherTank.height &&
+               newY + this.height > otherTank.y;
+    }
+
+    checkBaseCollision(newX, newY) {
+        if (!base || !base.active) return false;
+        return newX < base.x + base.width &&
+               newX + this.width > base.x &&
+               newY < base.y + base.height &&
+               newY + this.height > base.y;
     }
 
     shoot() {
@@ -182,6 +233,40 @@ class Bullet {
             this.y < 0 || this.y > CANVAS_HEIGHT) {
             this.active = false;
         }
+
+        // 墙壁碰撞检测
+        for (let wall of walls) {
+            if (wall.active && this.checkWallCollision(wall)) {
+                wall.takeDamage();
+                this.active = false;
+                if (!wall.active) {
+                    explosions.push(new Explosion(wall.x + wall.width/2, wall.y + wall.height/2));
+                }
+                break;
+            }
+        }
+
+        // 老家碰撞检测
+        if (base && base.active && this.checkBaseCollision()) {
+            if (base.takeDamage()) {
+                explosions.push(new Explosion(base.x + base.width/2, base.y + base.height/2));
+            }
+            this.active = false;
+        }
+    }
+
+    checkWallCollision(wall) {
+        return this.x < wall.x + wall.width &&
+               this.x + this.width > wall.x &&
+               this.y < wall.y + wall.height &&
+               this.y + this.height > wall.y;
+    }
+
+    checkBaseCollision() {
+        return this.x < base.x + base.width &&
+               this.x + this.width > base.x &&
+               this.y < base.y + base.height &&
+               this.y + this.height > base.y;
     }
 
     checkCollision(tank) {
@@ -216,23 +301,172 @@ class Explosion {
     }
 }
 
+class Wall {
+    constructor(x, y, width = 40, height = 40, type = 'brick') {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.type = type; // brick, steel, water
+        this.health = type === 'steel' ? 3 : 1;
+        this.active = true;
+    }
+
+    draw() {
+        if (!this.active) return;
+
+        switch(this.type) {
+            case 'brick':
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                // 绘制砖块纹理
+                ctx.strokeStyle = '#654321';
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.width/2, this.y);
+                ctx.lineTo(this.x + this.width/2, this.y + this.height);
+                ctx.moveTo(this.x, this.y + this.height/2);
+                ctx.lineTo(this.x + this.width, this.y + this.height/2);
+                ctx.stroke();
+                break;
+            case 'steel':
+                ctx.fillStyle = '#708090';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#2F4F4F';
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                break;
+            case 'water':
+                ctx.fillStyle = 'rgba(0, 150, 255, 0.6)';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                break;
+        }
+    }
+
+    takeDamage() {
+        if (this.type === 'steel') {
+            this.health--;
+            if (this.health <= 0) {
+                this.active = false;
+            }
+        } else if (this.type === 'brick') {
+            this.active = false;
+        }
+    }
+}
+
+class Base {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 60;
+        this.height = 60;
+        this.health = baseHealth;
+        this.maxHealth = baseHealth;
+        this.active = true;
+    }
+
+    draw() {
+        if (!this.active) return;
+
+        // 绘制基地
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+
+        // 绘制基地中心
+        ctx.fillStyle = '#FF6347';
+        ctx.beginPath();
+        ctx.arc(this.x + this.width/2, this.y + this.height/2, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 绘制生命值条
+        const barWidth = 40;
+        const barHeight = 4;
+        const barX = this.x + (this.width - barWidth) / 2;
+        const barY = this.y - 10;
+
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(barX, barY, barWidth * (this.health / this.maxHealth), barHeight);
+    }
+
+    takeDamage() {
+        this.health--;
+        if (this.health <= 0) {
+            this.active = false;
+            gameState = 'gameOver';
+            showGameOver();
+            return true;
+        }
+        return false;
+    }
+}
+
 // 游戏变量
 let playerTank = null;
 let enemyTanks = [];
 let explosions = [];
+let walls = [];
+let base = null;
 let keys = {};
 
 // 初始化游戏
 function initGame() {
-    playerTank = new Tank(CANVAS_WIDTH / 2 - 15, CANVAS_HEIGHT - 50, '#00ff00', 'up', true);
+    playerTank = new Tank(CANVAS_WIDTH / 2 - 15, CANVAS_HEIGHT - 120, '#00ff00', 'up', true);
     enemyTanks = [];
     explosions = [];
+    walls = [];
     playerScore = 0;
     currentLevel = 1;
     enemyTankCount = 5;
+    baseHealth = 5;
+
+    // 创建老家
+    base = new Base(CANVAS_WIDTH/2 - 30, CANVAS_HEIGHT - 60);
+
+    // 创建随机地图
+    createRandomMap();
 
     createEnemyTanks();
     updateUI();
+}
+
+// 创建随机地图
+function createRandomMap() {
+    walls = [];
+
+    // 在地图上随机生成墙壁
+    for (let i = 0; i < 15; i++) {
+        let x = Math.floor(Math.random() * 18) * 40 + 40;
+        let y = Math.floor(Math.random() * 12) * 40 + 40;
+
+        // 避免在老家附近生成墙壁
+        if (x < CANVAS_WIDTH/2 - 100 && x > CANVAS_WIDTH/2 + 100 &&
+            y < CANVAS_HEIGHT - 120 && y > CANVAS_HEIGHT - 40) {
+            continue;
+        }
+
+        // 避免在玩家起始位置生成墙壁
+        if (y > CANVAS_HEIGHT - 100) {
+            continue;
+        }
+
+        const type = Math.random() < 0.7 ? 'brick' : 'steel';
+        walls.push(new Wall(x, y, 40, 40, type));
+    }
+
+    // 创建老家周围的防护墙
+    const baseX = CANVAS_WIDTH/2 - 30;
+    const baseY = CANVAS_HEIGHT - 60;
+
+    // 老家周围的钢墙
+    walls.push(new Wall(baseX - 40, baseY, 40, 40, 'steel'));
+    walls.push(new Wall(baseX + 60, baseY, 40, 40, 'steel'));
+    walls.push(new Wall(baseX - 40, baseY - 40, 40, 40, 'steel'));
+    walls.push(new Wall(baseX, baseY - 40, 40, 40, 'steel'));
+    walls.push(new Wall(baseX + 20, baseY - 40, 40, 40, 'steel'));
+    walls.push(new Wall(baseX + 60, baseY - 40, 40, 40, 'steel'));
 }
 
 // 创建敌方坦克
@@ -268,6 +502,16 @@ function gameLoop() {
         ctx.moveTo(0, i);
         ctx.lineTo(CANVAS_WIDTH, i);
         ctx.stroke();
+    }
+
+    // 绘制墙壁
+    walls.forEach(wall => {
+        wall.draw();
+    });
+
+    // 绘制老家
+    if (base && base.active) {
+        base.draw();
     }
 
     // 处理玩家输入
@@ -367,6 +611,13 @@ function nextLevel() {
     currentLevel++;
     enemyTankCount = Math.min(enemyTankCount + 2, 10);
     playerScore += 500; // 过关奖励
+
+    // 重新生成地图
+    createRandomMap();
+
+    // 恢复老家生命值
+    base.health = Math.min(base.health + 2, base.maxHealth);
+
     createEnemyTanks();
 
     // 恢复玩家生命值
@@ -380,6 +631,7 @@ function updateUI() {
     document.getElementById('player-score').textContent = playerScore;
     document.getElementById('enemy-count').textContent = enemyTanks.length;
     document.getElementById('level').textContent = currentLevel;
+    document.getElementById('base-health').textContent = base ? base.health : 0;
 }
 
 // 显示游戏结束
